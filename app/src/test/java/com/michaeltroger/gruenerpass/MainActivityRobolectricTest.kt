@@ -1,6 +1,8 @@
 package com.michaeltroger.gruenerpass
 
+import android.content.ComponentName
 import android.content.Context
+import android.content.pm.ActivityInfo
 import android.os.Looper
 import android.view.View
 import androidx.preference.PreferenceManager
@@ -89,6 +91,16 @@ class MainActivityRobolectricTest {
 
         assertEquals(0, recyclerView.adapter!!.itemCount)
         assertEquals(View.VISIBLE, addButton.visibility)
+    }
+
+    @Test
+    fun mainActivity_doesNotLockTheOrientation() {
+        val activityInfo = context.packageManager.getActivityInfo(
+            ComponentName(context, MainActivity::class.java),
+            0
+        )
+
+        assertEquals(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED, activityInfo.screenOrientation)
     }
 
     private fun launchMainActivity(): MainActivity {

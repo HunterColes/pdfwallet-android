@@ -39,6 +39,7 @@ class PdfPageItem(
     private val invertColors: Boolean,
     private val showBarcodesInHalfSize: Boolean,
     private val generateNewBarcode: Boolean,
+    private val onPageLoaded: () -> Unit,
     ) : BindableItem<ItemCertificatePartialPdfPageBinding>() {
 
     private val scope = CoroutineScope(
@@ -48,7 +49,6 @@ class PdfPageItem(
     private var job: Job? = null
 
     private val barcodeCacheKey = "barcode-$fileName-$pageIndex-$generateNewBarcode"
-    private val pdfCacheKey = "pdf-$fileName-$pageIndex-$generateNewBarcode"
 
     override fun initializeViewBinding(view: View): ItemCertificatePartialPdfPageBinding
         = ItemCertificatePartialPdfPageBinding.bind(view)
@@ -59,6 +59,8 @@ class PdfPageItem(
     override fun bind(viewBinding: ItemCertificatePartialPdfPageBinding, position: Int) {
         job = scope.launch {
             val context = viewBinding.root.context
+            // the page is scaled to the screen width, which changes with the orientation
+            val pdfCacheKey = "pdf-$fileName-$pageIndex-$generateNewBarcode-${context.screenWidth}"
 
             var pdf: Bitmap? = BitmapCache.memoryCache.get(pdfCacheKey)
             if(!isActive) return@launch
@@ -108,6 +110,7 @@ class PdfPageItem(
 
                 viewBinding.pdfPage.setImageBitmap(pdf)
                 viewBinding.pdfPage.tag = TAG_PDF_LOADED
+                onPageLoaded()
 
                 if (searchBarcode != BarcodeSearchMode.DISABLED && barcode != null) {
                     viewBinding.barcode.setImageBitmap(barcode)
