@@ -2,8 +2,12 @@ package com.michaeltroger.gruenerpass.certificates.pager.item
 
 import android.content.Context
 import android.view.View
+import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.RecyclerView
 import com.michaeltroger.gruenerpass.R
 import com.michaeltroger.gruenerpass.barcode.BarcodeRenderer
+import com.michaeltroger.gruenerpass.cache.ScrollState
+import com.michaeltroger.gruenerpass.cache.ScrollStateCache
 import com.michaeltroger.gruenerpass.databinding.ItemCertificateBinding
 import com.michaeltroger.gruenerpass.certificates.pager.item.partials.CertificateHeaderItem
 import com.michaeltroger.gruenerpass.certificates.pager.item.partials.PdfPageItem
@@ -53,6 +57,18 @@ class CertificateItem(
 
     private var job: Job? = null
 
+    // the remembered position is applied again whenever a page gets its final height, until the user scrolls
+    private var pendingScrollState: ScrollState? = null
+
+    private val scrollListener = object : RecyclerView.OnScrollListener() {
+        override fun onScrollStateChanged(recyclerView: RecyclerView, newState: Int) {
+            when (newState) {
+                RecyclerView.SCROLL_STATE_DRAGGING -> pendingScrollState = null
+                RecyclerView.SCROLL_STATE_IDLE -> saveScrollState(recyclerView)
+            }
+        }
+    }
+
     override fun initializeViewBinding(view: View): ItemCertificateBinding = ItemCertificateBinding.bind(view)
     override fun getLayout() = R.layout.item_certificate
 
@@ -73,6 +89,7 @@ class CertificateItem(
         }
 
         viewHolder.binding.certificate.adapter = adapter
+        viewHolder.binding.certificate.addOnScrollListener(scrollListener)
         job = scope.launch {
             val itemList = mutableListOf<Group>()
             itemList.add(
@@ -97,16 +114,38 @@ class CertificateItem(
                         invertColors = invertColors,
                         showBarcodesInHalfSize = showBarcodesInHalfSize,
                         generateNewBarcode = generateNewBarcode,
+                        onPageLoaded = { restoreScrollState(viewHolder.binding.certificate) },
                     )
                 )
             }
             adapter.update(itemList)
+            pendingScrollState = ScrollStateCache.states[fileName]
+            restoreScrollState(viewHolder.binding.certificate)
         }
     }
+
+    private fun saveScrollState(recyclerView: RecyclerView) {
+        val layoutManager = recyclerView.layoutManager as LinearLayoutManager
+        val position = layoutManager.findFirstVisibleItemPosition()
+        val top = layoutManager.findViewByPosition(position)?.top ?: return
+        ScrollStateCache.states[fileName] = ScrollState(position, top, recyclerView.screenWidth)
+    }
+
+    private fun restoreScrollState(recyclerView: RecyclerView) {
+        val state = pendingScrollState ?: return
+        (recyclerView.layoutManager as LinearLayoutManager).scrollToPositionWithOffset(
+            state.position,
+            state.offsetAt(recyclerView.screenWidth),
+        )
+    }
+
+    private val View.screenWidth: Int
+        get() = resources.displayMetrics.widthPixels
 
     override fun unbind(viewHolder: GroupieViewHolder<ItemCertificateBinding>) {
         super.unbind(viewHolder)
         job?.cancel()
+        viewHolder.binding.certificate.removeOnScrollListener(scrollListener)
     }
 
     override fun isSameAs(other: Item<*>): Boolean {
